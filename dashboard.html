@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不鏽鋼生產最佳化與碳定價政策 - 敏感性分析</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* ================= 頂級管顧/金融儀表板配色 ================= */
+        * { box-sizing: border-box; }
+        
+        :root {
+            /* 背景與版面 */
+            --bg-body: #F3F4F6;         /* 略帶冷色調的淺灰底 */
+            --bg-card: #FFFFFF;         /* 純白無暇卡片 */
+            --text-main: #111827;       /* 極深灰(接近黑，比純黑柔和) */
+            --text-muted: #6B7280;      /* 專業灰色 */
+            --border-light: #E5E7EB;    /* 極細緻邊框 */
+            
+            /* 數據核心調色盤 (低飽和、高質感) */
+            --c-profit: #1E3A8A;        /* 深湛藍 (穩重、核心) */
+            --c-p1: #0F766E;            /* 松石綠 */
+            --c-p2: #6D28D9;            /* 紫水晶 */
+            --c-p3: #B45309;            /* 琥珀褐 */
+            --c-cq1: #15803D;           /* 森林綠 (賣出/正面) */
+            --c-cq2: #BE123C;           /* 勃根地紅 (買入/成本) */
+            --c-em:  #475569;           /* 碳排灰 */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            margin: 0; padding: 0; line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ================= 頂部導覽列 (極簡化) ================= */
+        header {
+            background-color: var(--bg-card);
+            padding: 24px 40px 0 40px;
+            text-align: center;
+        }
+
+        h1 { margin: 0 0 24px 0; font-size: 20px; font-weight: 500; letter-spacing: 1px; color: var(--text-main); }
+
+        .tab-menu {
+            display: flex; justify-content: center; gap: 50px;
+            padding: 0; margin: 0; list-style: none;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .tab-menu button {
+            background: none; border: none; color: var(--text-muted);
+            padding: 0 0 12px 0; font-size: 14px; font-weight: 500; cursor: pointer;
+            border-bottom: 2px solid transparent; transition: all 0.2s ease;
+            transform: translateY(1px); /* 蓋住底線 */
+        }
+
+        .tab-menu button:hover { color: var(--text-main); }
+        .tab-menu button.active { color: var(--text-main); border-bottom: 2px solid var(--text-main); }
+
+        /* ================= 主內容與控制區 ================= */
+        .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+        .tab-content { display: none; animation: fadeIn 0.4s ease-out; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .control-panel {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px; padding: 12px 20px;
+            background-color: var(--bg-card); border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.03);
+        }
+
+        .control-label { font-size: 14px; font-weight: 500; color: var(--text-muted); min-width: 180px; }
+        
+        .slider-wrapper { flex-grow: 1; margin: 0 30px; display: flex; align-items: center; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: var(--border-light); border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: var(--text-main); margin-top: -6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        
+        .control-value { font-size: 18px; font-weight: 600; color: var(--text-main); min-width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* ================= 圖表與動態玻璃卡片 ================= */
+        .dashboard-layout { display: flex; flex-direction: column; gap: 20px; }
+
+        .chart-card {
+            background-color: var(--bg-card); border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            padding: 20px 20px 10px 20px; height: 300px; position: relative;
+        }
+
+        /* 絕對定位的玻璃質感卡片 (設計更精巧) */
+        .floating-info-card {
+            position: absolute; top: 20px; z-index: 10;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 8px; padding: 12px 16px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            min-width: 190px; pointer-events: none; 
+            transition: left 0.1s ease-out, right 0.1s ease-out; 
+        }
+
+        .card-header { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px;}
+        .info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 13px; }
+        .info-row:last-child { margin-bottom: 0; }
+        .info-label { color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .info-value { color: var(--text-main); font-weight: 600; font-variant-numeric: tabular-nums; }
+        
+        .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+        .dot-profit { background-color: var(--c-profit); }
+        .dot-p1 { background-color: var(--c-p1); }
+        .dot-p2 { background-color: var(--c-p2); }
+        .dot-p3 { background-color: var(--c-p3); }
+        .dot-cq2 { background-color: var(--c-cq2); }
+        .dot-cq1 { background-color: var(--c-cq1); }
+        .dot-em { background-color: var(--c-em); }
+
+        .profit-pos { color: var(--c-profit) !important; font-size: 15px;}
+        .profit-neg { color: var(--c-cq2) !important; font-size: 15px;}
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>不鏽鋼生產最佳化與碳定價政策</h1>
+        <ul class="tab-menu">
+            <li><button class="tab-link active" onclick="openTab(event, 'tab1')">碳權價格分析</button></li>
+            <li><button class="tab-link" onclick="openTab(event, 'tab2')">碳稅政策分析</button></li>
+            <li><button class="tab-link" onclick="openTab(event, 'tab3')">減碳技術升級</button></li>
+        </ul>
+    </header>
+
+    <div class="container">
+        
+        <div id="tab1" class="tab-content active">
+            <div class="control-panel">
+                <div class="control-label">碳權價格 ($r$)</div>
+                <div class="slider-wrapper"><input type="range" id="slider1" min="50" max="2500" step="50" value="50"></div>
+                <div class="control-value" id="val1">50</div>
+            </div>
+            
+            <div class="dashboard-layout">
+                <div class="chart-card">
+                    <div class="floating-info-card" id="t1-card">
+                        <div class="card-header">Current Metrics</div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-profit"></span>總利潤</span><span class="info-value profit-pos" id="t1-profit">0</span></div>
+                        <div class="info-row" style="margin-top: 8px;"><span class="info-label"><span class="dot dot-p1"></span>P1 產量</span><span class="info-value" id="t1-p1">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-p2"></span>P2 產量</span><span class="info-value" id="t1-p2">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-p3"></span>P3 產量</span><span class="info-value" id="t1-p3">0</span></div>
+                        <div class="info-row" style="margin-top: 8px;"><span class="info-label"><span class="dot dot-cq2"></span>買入碳權</span><span class="info-value" id="t1-cq2">0</span></div>
+                    </div>
+                    <canvas id="chart1_profit"></canvas>
+                </div>
+                <div class="chart-card"><canvas id="chart1_vol"></canvas></div>
+            </div>
+        </div>
+
+        <div id="tab2" class="tab-content">
+            <div class="control-panel">
+                <div class="control-label">碳稅倍數 ($m$)</div>
+                <div class="slider-wrapper"><input type="range" id="slider2" min="0.5" max="5.0" step="0.25" value="0.5"></div>
+                <div class="control-value" id="val2">0.5</div>
+            </div>
+            
+            <div class="dashboard-layout">
+                <div class="chart-card">
+                    <div class="floating-info-card" id="t2-card">
+                        <div class="card-header">Current Metrics</div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-profit"></span>總利潤</span><span class="info-value profit-pos" id="t2-profit">0</span></div>
+                        <div class="info-row" style="margin-top: 8px;"><span class="info-label"><span class="dot dot-p1"></span>P1 產量</span><span class="info-value" id="t2-p1">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-p2"></span>P2 產量</span><span class="info-value" id="t2-p2">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-p3"></span>P3 產量</span><span class="info-value" id="t2-p3">0</span></div>
+                        <div class="info-row" style="margin-top: 8px;"><span class="info-label"><span class="dot dot-em"></span>總碳排</span><span class="info-value" id="t2-em">0</span></div>
+                    </div>
+                    <canvas id="chart2_profit"></canvas>
+                </div>
+                <div class="chart-card"><canvas id="chart2_vol"></canvas></div>
+            </div>
+        </div>
+
+        <div id="tab3" class="tab-content">
+            <div class="control-panel">
+                <div class="control-label">技術升級 (單位碳排下降)</div>
+                <div class="slider-wrapper"><input type="range" id="slider3" min="0" max="60" step="5" value="0"></div>
+                <div class="control-value"><span id="val3">0</span>%</div>
+            </div>
+            
+            <div class="dashboard-layout">
+                <div class="chart-card">
+                    <div class="floating-info-card" id="t3-card">
+                        <div class="card-header">Current Metrics</div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-profit"></span>總利潤</span><span class="info-value profit-pos" id="t3-profit">0</span></div>
+                        <div class="info-row" style="margin-top: 8px;"><span class="info-label"><span class="dot dot-p1"></span>P1 產量</span><span class="info-value" id="t3-p1">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-p2"></span>P2 產量</span><span class="info-value" id="t3-p2">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-p3"></span>P3 產量</span><span class="info-value" id="t3-p3">0</span></div>
+                        <div class="info-row" style="margin-top: 8px;"><span class="info-label"><span class="dot dot-cq2"></span>買入碳權</span><span class="info-value" id="t3-cq2">0</span></div>
+                        <div class="info-row"><span class="info-label"><span class="dot dot-cq1"></span>賣出碳排</span><span class="info-value" id="t3-cq1">0</span></div>
+                    </div>
+                    <canvas id="chart3_profit"></canvas>
+                </div>
+                <div class="chart-card"><canvas id="chart3_vol"></canvas></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 核心資料區 ---
+        const rawData1 = [
+            { x: 50, profit: 31055000, p1: 8000, p2: 5000, p3: 3000, cq2: 44500 },
+            { x: 750, profit: 24405000, p1: 8000, p2: 5000, p3: 3000, cq2: 44500 },
+            { x: 800, profit: 24263500, p1: 3250, p2: 5000, p3: 3000, cq2: 0 },
+            { x: 1400, profit: 29867500, p1: 500, p2: 500, p3: 3000, cq2: 0 },
+            { x: 1450, profit: 31182944, p1: 500, p2: 500, p3: 555, cq2: 0 },
+            { x: 1700, profit: 38737500, p1: 500, p2: 500, p3: 200, cq2: 0 },
+            { x: 2500, profit: 64017500, p1: 500, p2: 500, p3: 200, cq2: 0 }
+        ];
+
+        const rawData2 = [
+            { x: 0.5, profit: 36067500, p1: 8000, p2: 5000, p3: 3000, em: 44500 },
+            { x: 2.0, profit: 15330000, p1: 8000, p2: 5000, p3: 3000, em: 44500 },
+            { x: 2.25, profit: 13013500, p1: 3250, p2: 5000, p3: 3000, em: 35000 },
+            { x: 3.25, profit: 4013500, p1: 3250, p2: 5000, p3: 3000, em: 35000 },
+            { x: 3.5, profit: 2660666, p1: 500, p2: 1833, p3: 3000, em: 20000 },
+            { x: 4.0, profit: 785666, p1: 500, p2: 1833, p3: 3000, em: 20000 },
+            { x: 4.25, profit: -151833, p1: 500, p2: 1833, p3: 3000, em: 20000 },
+            { x: 5.0, profit: -2963000, p1: 500, p2: 1800, p3: 3000, em: 19900 }
+        ];
+
+        const rawData3 = [
+            { x: 0, profit: 29155000, p1: 8000, p2: 5000, p3: 3000, cq2: 44500, cq1: 0 },
+            { x: 15, profit: 33160000, p1: 8000, p2: 5000, p3: 3000, cq2: 37825, cq1: 0 },
+            { x: 20, profit: 35366000, p1: 7600, p2: 5000, p3: 3000, cq2: 0, cq1: 34960 },
+            { x: 25, profit: 37248750, p1: 8000, p2: 5000, p3: 3000, cq2: 0, cq1: 33375 },
+            { x: 60, profit: 46455000, p1: 8000, p2: 5000, p3: 3000, cq2: 0, cq1: 17800 }
+        ];
+
+        // 階段色塊設定 (極度淡化，僅做隱性引導)
+        const stageDef1 = [
+            { min: 50, max: 775, color: 'rgba(37, 99, 235, 0.03)', label: 'Stage I: Buy to Produce' },
+            { min: 775, max: 1425, color: 'rgba(217, 119, 6, 0.03)', label: 'Stage II: Cutback' },
+            { min: 1425, max: 2500, color: 'rgba(225, 29, 72, 0.03)', label: 'Stage III: Minimum Ops' }
+        ];
+        const stageDef2 = [
+            { min: 0.5, max: 2.125, color: 'rgba(37, 99, 235, 0.03)', label: 'Stage I: Profit Erosion' },
+            { min: 2.125, max: 3.375, color: 'rgba(217, 119, 6, 0.03)', label: 'Stage II: Defensive' },
+            { min: 3.375, max: 5.0, color: 'rgba(225, 29, 72, 0.03)', label: 'Stage III: Critical' }
+        ];
+        const stageDef3 = [
+            { min: 0, max: 17.5, color: 'rgba(37, 99, 235, 0.03)', label: 'Stage I: Passive Saving' },
+            { min: 17.5, max: 22.5, color: 'rgba(217, 119, 6, 0.03)', label: 'Stage II: Reversal' },
+            { min: 22.5, max: 60, color: 'rgba(21, 128, 61, 0.03)', label: 'Stage III: Proactive Yield' }
+        ];
+
+        const style = getComputedStyle(document.body);
+        const colors = {
+            profit: style.getPropertyValue('--c-profit').trim(),
+            p1: style.getPropertyValue('--c-p1').trim(),
+            p2: style.getPropertyValue('--c-p2').trim(),
+            p3: style.getPropertyValue('--c-p3').trim(),
+            cq1: style.getPropertyValue('--c-cq1').trim(),
+            cq2: style.getPropertyValue('--c-cq2').trim(),
+            em: style.getPropertyValue('--c-em').trim(),
+        };
+
+        function interpolate(targetX, dataArray) {
+            if (targetX <= dataArray[0].x) return { ...dataArray[0] };
+            if (targetX >= dataArray[dataArray.length - 1].x) return { ...dataArray[dataArray.length - 1] };
+            for (let i = 0; i < dataArray.length - 1; i++) {
+                let d1 = dataArray[i], d2 = dataArray[i + 1];
+                if (targetX >= d1.x && targetX <= d2.x) {
+                    let ratio = (targetX - d1.x) / (d2.x - d1.x);
+                    let result = { x: targetX };
+                    for (let key in d1) if (key !== 'x') result[key] = d1[key] + (d2[key] - d1[key]) * ratio;
+                    return result;
+                }
+            }
+        }
+
+        function generateFullCurve(dataArray, minX, maxX, step) {
+            let result = [];
+            for (let x = minX; x <= maxX; x += step) result.push(interpolate(Math.round(x * 100) / 100, dataArray));
+            return result;
+        }
+
+        function formatNum(num) { return Math.round(num).toLocaleString('en-US'); }
+        function updateProfitColor(elId, profit) {
+            let el = document.getElementById(elId);
+            el.innerText = formatNum(profit);
+            el.className = profit < 0 ? 'info-value profit-neg' : 'info-value profit-pos';
+        }
+
+        // --- Chart.js 外掛 ---
+        const stageBackgroundPlugin = {
+            id: 'stageBackground',
+            beforeDraw: (chart) => {
+                const stages = chart.config.options.plugins.stageBackground?.stages;
+                if (stages && stages.length > 0) {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const topY = chart.chartArea.top;
+                    const height = chart.chartArea.bottom - topY;
+
+                    ctx.save();
+                    stages.forEach(stage => {
+                        let left = xAxis.getPixelForValue(stage.min);
+                        let right = xAxis.getPixelForValue(stage.max);
+                        left = Math.max(left, chart.chartArea.left);
+                        right = Math.min(right, chart.chartArea.right);
+                        
+                        if (right > left) {
+                            ctx.fillStyle = stage.color;
+                            ctx.fillRect(left, topY, right - left, height);
+                            ctx.fillStyle = '#9CA3AF';
+                            ctx.font = '500 11px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(stage.label, left + (right - left) / 2, topY + 15);
+                        }
+                    });
+                    ctx.restore();
+                }
+            }
+        };
+
+        const verticalLinePlugin = {
+            id: 'verticalLine',
+            beforeDatasetsDraw: (chart) => {
+                const currentX = chart.config.options.plugins.verticalLine?.currentX;
+                if (currentX !== undefined && currentX !== null) {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const topY = chart.chartArea.top;
+                    const bottomY = chart.chartArea.bottom;
+                    const x = xAxis.getPixelForValue(currentX);
+
+                    if (x >= chart.chartArea.left && x <= chart.chartArea.right) {
+                        ctx.save();
+                        ctx.beginPath(); ctx.moveTo(x, topY); ctx.lineTo(x, bottomY);
+                        ctx.lineWidth = 1; ctx.strokeStyle = '#9CA3AF';
+                        ctx.setLineDash([3, 3]); ctx.stroke();
+                        
+                        ctx.beginPath(); ctx.arc(x, topY, 3, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#9CA3AF'; ctx.fill();
+                        ctx.restore();
+                    }
+                }
+            }
+        };
+
+        Chart.register(stageBackgroundPlugin, verticalLinePlugin);
+
+        // --- 共用 Chart 配置 ---
+        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif';
+        const baseOptions = {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { 
+                tooltip: { enabled: false },
+                legend: { display: false }, // ★ 完全隱藏原生圖例，極致乾淨
+                verticalLine: { currentX: null },
+                stageBackground: { stages: [] }
+            },
+            scales: { 
+                x: { type: 'linear', grid: { display: false }, ticks: { color: '#9CA3AF', font: {size: 11} } }, 
+                y: { grid: { color: '#F3F4F6', drawBorder: false }, border: { display: false }, ticks: { color: '#9CA3AF', maxTicksLimit: 5, font: {size: 11} } } 
+            },
+            elements: { point: { radius: 0, hitRadius: 10, hoverRadius: 0 } } // 移除滑鼠hover點放大
+        };
+
+        const charts = {};
+
+        function initCharts() {
+            // ----- Tab 1 -----
+            const d1 = generateFullCurve(rawData1, 50, 2500, 50);
+            const scaleX1 = { type: 'linear', min: 50, max: 2500, grid: { display: false }, ticks: { color: '#9CA3AF' } };
+            
+            charts.t1_p = new Chart(document.getElementById('chart1_profit'), {
+                type: 'line', data: { datasets: [{ label: 'Profit', data: d1.map(d => ({x: d.x, y: d.profit})), borderColor: colors.profit, backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.1, borderWidth: 2 }] },
+                options: { ...baseOptions, plugins: { ...baseOptions.plugins, stageBackground: { stages: stageDef1 } }, scales: { x: { ...scaleX1, display: false }, y: baseOptions.scales.y } }
+            });
+            charts.t1_v = new Chart(document.getElementById('chart1_vol'), {
+                type: 'line', data: { datasets: [
+                    { label: 'P1', data: d1.map(d => ({x: d.x, y: d.p1})), borderColor: colors.p1, tension: 0.1, borderWidth: 2 },
+                    { label: 'P2', data: d1.map(d => ({x: d.x, y: d.p2})), borderColor: colors.p2, tension: 0.1, borderWidth: 2 },
+                    { label: 'P3', data: d1.map(d => ({x: d.x, y: d.p3})), borderColor: colors.p3, tension: 0.1, borderWidth: 2 },
+                    { label: 'CQ2', data: d1.map(d => ({x: d.x, y: d.cq2})), borderColor: colors.cq2, borderDash: [4, 4], tension: 0.1, borderWidth: 1.5 }
+                ]},
+                options: { ...baseOptions, plugins: { ...baseOptions.plugins, stageBackground: { stages: stageDef1 } }, scales: { x: scaleX1, y: baseOptions.scales.y } }
+            });
+
+            // ----- Tab 2 -----
+            const d2 = generateFullCurve(rawData2, 0.5, 5.0, 0.25);
+            const scaleX2 = { type: 'linear', min: 0.5, max: 5.0, grid: { display: false }, ticks: { color: '#9CA3AF' } };
+
+            charts.t2_p = new Chart(document.getElementById('chart2_profit'), {
+                type: 'line', data: { datasets: [{ label: 'Profit', data: d2.map(d => ({x: d.x, y: d.profit})), borderColor: colors.profit, backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.1, borderWidth: 2 }] },
+                options: { ...baseOptions, plugins: { ...baseOptions.plugins, stageBackground: { stages: stageDef2 } }, scales: { x: { ...scaleX2, display: false }, y: baseOptions.scales.y } }
+            });
+            charts.t2_v = new Chart(document.getElementById('chart2_vol'), {
+                type: 'line', data: { datasets: [
+                    { label: 'P1', data: d2.map(d => ({x: d.x, y: d.p1})), borderColor: colors.p1, tension: 0.1, borderWidth: 2 },
+                    { label: 'P2', data: d2.map(d => ({x: d.x, y: d.p2})), borderColor: colors.p2, tension: 0.1, borderWidth: 2 },
+                    { label: 'P3', data: d2.map(d => ({x: d.x, y: d.p3})), borderColor: colors.p3, tension: 0.1, borderWidth: 2 },
+                    { label: 'Emissions', data: d2.map(d => ({x: d.x, y: d.em})), borderColor: colors.em, borderDash: [4, 4], tension: 0.1, borderWidth: 1.5 }
+                ]},
+                options: { ...baseOptions, plugins: { ...baseOptions.plugins, stageBackground: { stages: stageDef2 } }, scales: { x: scaleX2, y: baseOptions.scales.y } }
+            });
+
+            // ----- Tab 3 -----
+            const d3 = generateFullCurve(rawData3, 0, 60, 5);
+            const scaleX3 = { type: 'linear', min: 0, max: 60, grid: { display: false }, ticks: { color: '#9CA3AF' } };
+
+            charts.t3_p = new Chart(document.getElementById('chart3_profit'), {
+                type: 'line', data: { datasets: [{ label: 'Profit', data: d3.map(d => ({x: d.x, y: d.profit})), borderColor: colors.profit, backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.1, borderWidth: 2 }] },
+                options: { ...baseOptions, plugins: { ...baseOptions.plugins, stageBackground: { stages: stageDef3 } }, scales: { x: { ...scaleX3, display: false }, y: baseOptions.scales.y } }
+            });
+            charts.t3_v = new Chart(document.getElementById('chart3_vol'), {
+                type: 'line', data: { datasets: [
+                    { label: 'P1', data: d3.map(d => ({x: d.x, y: d.p1})), borderColor: colors.p1, tension: 0.1, borderWidth: 2 },
+                    { label: 'P2', data: d3.map(d => ({x: d.x, y: d.p2})), borderColor: colors.p2, tension: 0.1, borderWidth: 2 },
+                    { label: 'P3', data: d3.map(d => ({x: d.x, y: d.p3})), borderColor: colors.p3, tension: 0.1, borderWidth: 2 },
+                    { label: 'CQ2', data: d3.map(d => ({x: d.x, y: d.cq2})), borderColor: colors.cq2, borderDash: [4, 4], tension: 0.1, borderWidth: 1.5 },
+                    { label: 'CQ1', data: d3.map(d => ({x: d.x, y: d.cq1})), borderColor: colors.cq1, borderDash: [4, 4], tension: 0.1, borderWidth: 1.5 }
+                ]},
+                options: { ...baseOptions, plugins: { ...baseOptions.plugins, stageBackground: { stages: stageDef3 } }, scales: { x: scaleX3, y: baseOptions.scales.y } }
+            });
+        }
+
+        // ========================== 互動追蹤邏輯 ==========================
+        function updateChartLine(chartProfit, chartVol, val, tabPrefix) {
+            chartProfit.config.options.plugins.verticalLine.currentX = val;
+            chartVol.config.options.plugins.verticalLine.currentX = val;
+            chartProfit.update('none'); 
+            chartVol.update('none');
+
+            const card = document.getElementById(`${tabPrefix}-card`);
+            if (card && chartProfit.scales.x) {
+                const pixelX = chartProfit.scales.x.getPixelForValue(val);
+                const chartWidth = chartProfit.width;
+                const centerPoint = (chartProfit.chartArea.left + chartProfit.chartArea.right) / 2;
+
+                if (pixelX > centerPoint) {
+                    card.style.left = 'auto';
+                    card.style.right = `${chartWidth - pixelX + 25}px`; 
+                } else {
+                    card.style.right = 'auto';
+                    card.style.left = `${pixelX + 25}px`;
+                }
+            }
+        }
+
+        document.getElementById('slider1').addEventListener('input', function(e) {
+            let val = parseFloat(e.target.value);
+            document.getElementById('val1').innerText = val;
+            let d = interpolate(val, rawData1);
+            
+            updateProfitColor('t1-profit', d.profit);
+            document.getElementById('t1-p1').innerText = formatNum(d.p1);
+            document.getElementById('t1-p2').innerText = formatNum(d.p2);
+            document.getElementById('t1-p3').innerText = formatNum(d.p3);
+            document.getElementById('t1-cq2').innerText = formatNum(d.cq2);
+            updateChartLine(charts.t1_p, charts.t1_v, val, 't1');
+        });
+
+        document.getElementById('slider2').addEventListener('input', function(e) {
+            let val = parseFloat(e.target.value);
+            document.getElementById('val2').innerText = val;
+            let d = interpolate(val, rawData2);
+            
+            updateProfitColor('t2-profit', d.profit);
+            document.getElementById('t2-p1').innerText = formatNum(d.p1);
+            document.getElementById('t2-p2').innerText = formatNum(d.p2);
+            document.getElementById('t2-p3').innerText = formatNum(d.p3);
+            document.getElementById('t2-em').innerText = formatNum(d.em);
+            updateChartLine(charts.t2_p, charts.t2_v, val, 't2');
+        });
+
+        document.getElementById('slider3').addEventListener('input', function(e) {
+            let val = parseFloat(e.target.value);
+            document.getElementById('val3').innerText = val;
+            let d = interpolate(val, rawData3);
+            
+            updateProfitColor('t3-profit', d.profit);
+            document.getElementById('t3-p1').innerText = formatNum(d.p1);
+            document.getElementById('t3-p2').innerText = formatNum(d.p2);
+            document.getElementById('t3-p3').innerText = formatNum(d.p3);
+            document.getElementById('t3-cq2').innerText = formatNum(d.cq2);
+            document.getElementById('t3-cq1').innerText = formatNum(d.cq1);
+            updateChartLine(charts.t3_p, charts.t3_v, val, 't3');
+        });
+
+        function openTab(evt, tabName) {
+            let tabcontent = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+                tabcontent[i].classList.remove("active");
+            }
+            let tablinks = document.getElementsByClassName("tab-link");
+            for (let i = 0; i < tablinks.length; i++) tablinks[i].classList.remove("active");
+            
+            document.getElementById(tabName).style.display = "block";
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+
+            const tabNum = tabName.replace('tab', '');
+            setTimeout(() => {
+                document.getElementById('slider' + tabNum).dispatchEvent(new Event('input'));
+            }, 10);
+        }
+
+        initCharts();
+        setTimeout(() => {
+            document.getElementById('slider1').dispatchEvent(new Event('input'));
+            document.getElementById('slider2').dispatchEvent(new Event('input'));
+            document.getElementById('slider3').dispatchEvent(new Event('input'));
+        }, 50);
+
+    </script>
+</body>
+</html>
